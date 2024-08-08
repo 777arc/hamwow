@@ -88,12 +88,12 @@ class MainWindow(QMainWindow):
         freq_slider.setValue(int(worker.sdr.center_freq/1e3))
         freq_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
         freq_slider.setTickInterval(int(1e6))
-        freq_slider.sliderMoved.connect(worker.update_freq) # there's also a valueChanged option
+        freq_slider.valueChanged.connect(worker.update_freq)
         freq_label = QLabel()
         def update_freq_label(val):
             freq_label.setText("Frequency [MHz]: " + str(val/1e3))
             freq_plot.autoRange()
-        freq_slider.sliderMoved.connect(update_freq_label)
+        freq_slider.valueChanged.connect(update_freq_label)
         update_freq_label(freq_slider.value()) # initialize the label
         layout.addWidget(freq_slider, 5, 0)
         layout.addWidget(freq_label, 5, 1)
@@ -102,7 +102,7 @@ class MainWindow(QMainWindow):
         gain_slider = QSlider(Qt.Orientation.Horizontal)
         gain_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
         gain_slider.setTickInterval(1)
-        gain_slider.sliderMoved.connect(worker.update_gain)
+        gain_slider.valueChanged.connect(worker.update_gain)
         gain_slider.setRange(0, len(worker.sdr.valid_gains_db) - 1) # there's no easy way to make the interval not be 1... 
         gain_slider.setValue(len(worker.sdr.valid_gains_db) - 1) # highest gain index
         gain_label = QLabel()
@@ -111,7 +111,7 @@ class MainWindow(QMainWindow):
         def update_gain_label(val):
             gain_label.setText("Gain: " + str(worker.sdr.valid_gains_db[val]))
         update_gain_label(gain_slider.value()) # initialize the label
-        gain_slider.sliderMoved.connect(update_gain_label)
+        gain_slider.valueChanged.connect(update_gain_label)
         layout.addWidget(gain_slider, 6, 0)
         layout.addWidget(gain_label, 6, 1)
 
@@ -139,12 +139,12 @@ class MainWindow(QMainWindow):
         demod_freq_slider.setValue(0)
         demod_freq_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
         demod_freq_slider.setTickInterval(int(0.1e3))
-        demod_freq_slider.sliderMoved.connect(worker.update_demod_freq)
+        demod_freq_slider.valueChanged.connect(worker.update_demod_freq)
         demod_freq_label = QLabel()
         def update_demod_freq_label(val):
             demod_freq_label.setText("Demod Frequency [kHz]: " + str(val))
             demod_line.setValue(freq_slider.value()/1e3 + val/1e3)
-        demod_freq_slider.sliderMoved.connect(update_demod_freq_label)
+        demod_freq_slider.valueChanged.connect(update_demod_freq_label)
         update_demod_freq_label(demod_freq_slider.value()) # initialize the label
         layout.addWidget(demod_freq_slider, 9, 0)
         layout.addWidget(demod_freq_label, 9, 1)
