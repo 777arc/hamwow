@@ -1,0 +1,6 @@
+PyQt6==6.7.1
+pyqtgraph==0.13.7
+numpy==2.0.1
+scipy==1.14.0
+pyrtlsdr==0.3.0
+PyAudio==0.2.14
