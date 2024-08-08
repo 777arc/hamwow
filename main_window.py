@@ -2,7 +2,7 @@ from PyQt6.QtCore import QSize, Qt, QThread, QTimer
 from PyQt6.QtWidgets import QMainWindow, QGridLayout, QWidget, QSlider, QLabel, QHBoxLayout, QVBoxLayout, QPushButton, QComboBox  # tested with PyQt6==6.7.0
 import pyqtgraph as pg # tested with pyqtgraph==0.13.7
 import numpy as np
-from worker_thread import SDRWorker
+from sdr_thread import SDRWorker
  
 # Subclass QMainWindow to customize your application's main window
 class MainWindow(QMainWindow):

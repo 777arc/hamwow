@@ -6,7 +6,7 @@ from scipy.signal import firwin, bilinear, lfilter
 import pyaudio
 from demods.fm import fm_demod
  
-class SDRWorker(QObject):
+class SDRWorker(QObject): # A QThread gets created in main_window which is assigned to this worker
     # PyQt Signals
     time_plot_update = pyqtSignal(np.ndarray)
     freq_plot_update = pyqtSignal(np.ndarray)
