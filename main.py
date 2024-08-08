@@ -7,7 +7,7 @@ import signal # lets control-C actually close the app
 from rtlsdr import RtlSdr
 from scipy.signal import resample_poly, firwin, bilinear, lfilter
 import pyaudio
-
+ 
 # Defaults
 fft_size = 4096
 buffer_size = int(100e3) # number of samples processed at a time for demod and such
