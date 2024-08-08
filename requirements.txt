@@ -4,3 +4,5 @@ numpy==2.0.1
 scipy==1.14.0
 pyrtlsdr==0.3.0
 PyAudio==0.2.14
+pytest==8.3.2
+matplotlib==3.9.0

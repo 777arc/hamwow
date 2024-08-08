@@ -99,7 +99,7 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
         samples_shifted = samples * np.exp(-2j*np.pi*self.demod_freq_khz*1e3*np.arange(self.buffer_size)/self.sdr.sample_rate) # freq shift
 
         # Demod FM
-        samples_demod = fm_demod(samples_shifted, self.sdr.sample_rate)
+        samples_demod, new_sample_rate = fm_demod(samples_shifted, self.sdr.sample_rate)
 
         # Play audio
         #samples_demod /= np.max(np.abs(samples_demod)) # normalize volume so its between -1 and +1

@@ -9,14 +9,14 @@ def fm_demod(x, sample_rate):
     bz, az = bilinear(1, [75e-6, 1], fs=sample_rate) # De-emphasis filter, H(s) = 1/(RC*s + 1), implemented as IIR via bilinear transform
     x = lfilter(bz, az, x) # apply de-emphasis filter
     x = x[::6] # decimate by 6 to get mono audio
-    #sample_rate_audio = sample_rate/6/4
+    new_sample_rate = sample_rate/6/4
     #print("Sample rate audio:", sample_rate_audio)
     #h_audio = firwin(21, cutoff=2e3, fs=sample_rate_audio)
     #x = np.convolve(x, h_audio, 'same') # Low pass filter to get rid of popping
-    return x
+    return x, new_sample_rate
 
 
 if __name__ == "__main__":
+    import matplotlib.pyplot as plt
     # TODO - make a test that opens an example file and runs fm_demod and plots stuff
-    pass
 
