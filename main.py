@@ -19,18 +19,13 @@ sample_rate = sample_rates[0] * 1e6
 time_plot_samples = 500
 gain = 50 # 0 to 73 dB. int
 
-# Init SDR
-sdr = RtlSdr()
-sdr.sample_rate = sample_rate
-sdr.center_freq = center_freq
-sdr.gain = sdr.valid_gains_db[-1] # max gain
-
 class SDRWorker(QObject):
     # PyQt Signals
     time_plot_update = pyqtSignal(np.ndarray)
     freq_plot_update = pyqtSignal(np.ndarray)
     waterfall_plot_update = pyqtSignal(np.ndarray)
     end_of_run = pyqtSignal() # happens many times a second
+    populate_gains = pyqtSignal(list)
 
     # State
     spectrogram = -50*np.ones((fft_size, num_rows))
@@ -43,6 +38,7 @@ class SDRWorker(QObject):
     audio_buffer_read_pointer = 0
     audio_buffer_write_pointer = 0
     audio_buffer = np.zeros(int(100e6), dtype=np.float32)
+    first_run = True
     
     def audio_callback(self, in_data, frame_count, time_info, status):
         #print("GOT HERE, frame_count:", frame_count)
@@ -59,6 +55,11 @@ class SDRWorker(QObject):
 
     def __init__(self):
         super(SDRWorker, self).__init__()
+        # Init SDR
+        self.sdr = RtlSdr()
+        self.sdr.sample_rate = sample_rate
+        self.sdr.center_freq = center_freq
+        self.sdr.gain = self.sdr.valid_gains_db[-1] # max gain
         p = pyaudio.PyAudio()
         self.stream = p.open(format=pyaudio.paFloat32,
                              channels=1,
@@ -69,25 +70,15 @@ class SDRWorker(QObject):
     # PyQt Slots
     def update_freq(self, val): # TODO: WE COULD JUST MODIFY THE SDR IN THE GUI THREAD
         print("Updated freq to:", val, 'kHz')
-        #sdr.rx_lo = int(val*1e3)
-        #usrp.set_rx_freq(uhd.libpyuhd.types.tune_request(val*1e3), 0)
-        #flush_buffer()
-        sdr.center_freq = val*1e3
+        self.sdr.center_freq = val*1e3
     
     def update_gain(self, val):
-        print("Updated gain to:", sdr.valid_gains_db[val], 'dB')
-        #sdr.rx_hardwaregain_chan0 = val
-        #usrp.set_rx_gain(val, 0)
-        #flush_buffer()
-        sdr.gain = sdr.valid_gains_db[val]
+        print("Updated gain to:", self.sdr.valid_gains_db[val], 'dB')
+        self.sdr.gain = self.sdr.valid_gains_db[val]
 
     def update_sample_rate(self, val):
         print("Updated sample rate to:", sample_rates[val], 'MHz')
-        #sdr.sample_rate = int(sample_rates[val] * 1e6)
-        #sdr.rx_rf_bandwidth = int(sample_rates[val] * 1e6 * 0.8)
-        #usrp.set_rx_rate(sample_rates[val] * 1e6, 0)
-        #flush_buffer()
-        sdr.sample_rate = sample_rates[val] * 1e6
+        self.sdr.sample_rate = sample_rates[val] * 1e6
     
     def update_demod_freq(self, val):
         self.demod_freq_khz = val
@@ -95,11 +86,12 @@ class SDRWorker(QObject):
     # Main loop
     def run(self):
         start_t = time.time()
+
+        if self.first_run:
+            self.populate_gains.emit(self.sdr.valid_gains_db)
+            self.first_run = False
                 
-        #samples = sdr.rx() # Receive samples
-        #streamer.recv(recv_buffer, metadata)
-        #samples = recv_buffer[0] # will be np.complex64
-        samples = sdr.read_samples(buffer_size)
+        samples = self.sdr.read_samples(buffer_size)
         self.sample_count += len(samples)
         #print("Current rate:", self.sample_count/(time.time() - self.start_tt))
 
@@ -122,7 +114,7 @@ class SDRWorker(QObject):
         samples_demod = np.diff(np.unwrap(np.angle(samples_demod))) # FM demod
         samples_demod = lfilter(self.bz, self.az, samples_demod) # apply de-emphasis filter
         samples_demod = samples_demod[::6] # decimate by 6 to get mono audio
-        sample_rate_audio = sdr.sample_rate/6/4
+        sample_rate_audio = self.sdr.sample_rate/6/4
         #print("Sample rate audio:", sample_rate_audio)
 
         #h_audio = firwin(21, cutoff=2e3, fs=sample_rate_audio)
@@ -162,6 +154,7 @@ class MainWindow(QMainWindow):
 
         self.spectrogram_min = 0
         self.spectrogram_max = 0
+        self.valid_gains_db = [] # will get populated at start of app
 
         layout = QGridLayout() # overall layout
 
@@ -248,16 +241,13 @@ class MainWindow(QMainWindow):
 
         # Gain slider with label
         gain_slider = QSlider(Qt.Orientation.Horizontal)
-        gain_slider.setRange(0, len(sdr.valid_gains_db) - 1) # there's no easy way to make the interval not be 1... 
-        gain_slider.setValue(len(sdr.valid_gains_db) - 1) # highest gain index
         gain_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
         gain_slider.setTickInterval(1)
         gain_slider.sliderMoved.connect(worker.update_gain)
         gain_label = QLabel()
         def update_gain_label(val):
-            gain_label.setText("Gain: " + str(sdr.valid_gains_db[val]))
+            gain_label.setText("Gain: " + str(self.valid_gains_db[val]))
         gain_slider.sliderMoved.connect(update_gain_label)
-        update_gain_label(gain_slider.value()) # initialize the label
         layout.addWidget(gain_slider, 6, 0)
         layout.addWidget(gain_label, 6, 1)
 
@@ -320,10 +310,19 @@ class MainWindow(QMainWindow):
         def end_of_run_callback():
             QTimer.singleShot(0, worker.run) # Run worker again immediately
         
-        worker.time_plot_update.connect(time_plot_callback) # connect the signal to the callback
+        # This only runs once, at init
+        def populate_gains(valid_gains_db):
+            gain_slider.setRange(0, len(valid_gains_db) - 1) # there's no easy way to make the interval not be 1... 
+            gain_slider.setValue(len(valid_gains_db) - 1) # highest gain index
+            self.valid_gains_db = valid_gains_db
+            update_gain_label(gain_slider.value()) # initialize the label
+
+        # connect the signal to the callback
+        worker.time_plot_update.connect(time_plot_callback) 
         worker.freq_plot_update.connect(freq_plot_callback)
         worker.waterfall_plot_update.connect(waterfall_plot_callback)
         worker.end_of_run.connect(end_of_run_callback)
+        worker.populate_gains.connect(populate_gains)
 
         self.sdr_thread.started.connect(worker.run) # kicks off the worker when the thread starts
         self.sdr_thread.start()
@@ -334,6 +333,3 @@ window = MainWindow()
 window.show() # Windows are hidden by default
 signal.signal(signal.SIGINT, signal.SIG_DFL) # this lets control-C actually close the app
 app.exec() # Start the event loop
-
-#stream_cmd = uhd.types.StreamCMD(uhd.types.StreamMode.stop_cont)
-#streamer.issue_stream_cmd(stream_cmd)
