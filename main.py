@@ -14,7 +14,6 @@ class SDRWorker(QObject):
     freq_plot_update = pyqtSignal(np.ndarray)
     waterfall_plot_update = pyqtSignal(np.ndarray)
     end_of_run = pyqtSignal() # happens many times a second
-    populate_gains = pyqtSignal(list)
 
     # Defaults
     fft_size = 4096
@@ -34,7 +33,6 @@ class SDRWorker(QObject):
     audio_buffer_read_pointer = 0
     audio_buffer_write_pointer = 0
     audio_buffer = np.zeros(int(100e6), dtype=np.float32)
-    first_run = True
     
     def audio_callback(self, in_data, frame_count, time_info, status):
         #print("GOT HERE, frame_count:", frame_count)
@@ -83,10 +81,6 @@ class SDRWorker(QObject):
     def run(self):
         start_t = time.time()
 
-        if self.first_run:
-            self.populate_gains.emit(self.sdr.valid_gains_db)
-            self.first_run = False
-                
         samples = self.sdr.read_samples(self.buffer_size)
         self.sample_count += len(samples)
         #print("Current rate:", self.sample_count/(time.time() - self.start_tt))
@@ -152,7 +146,6 @@ class MainWindow(QMainWindow):
 
         self.spectrogram_min = 0
         self.spectrogram_max = 0
-        self.valid_gains_db = [] # will get populated at start of app
 
         layout = QGridLayout() # overall layout
 
@@ -242,9 +235,14 @@ class MainWindow(QMainWindow):
         gain_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
         gain_slider.setTickInterval(1)
         gain_slider.sliderMoved.connect(worker.update_gain)
+        gain_slider.setRange(0, len(worker.sdr.valid_gains_db) - 1) # there's no easy way to make the interval not be 1... 
+        gain_slider.setValue(len(worker.sdr.valid_gains_db) - 1) # highest gain index
         gain_label = QLabel()
+        if not len(worker.sdr.valid_gains_db):
+            print("Something went wrong")
         def update_gain_label(val):
-            gain_label.setText("Gain: " + str(self.valid_gains_db[val]))
+            gain_label.setText("Gain: " + str(worker.sdr.valid_gains_db[val]))
+        update_gain_label(gain_slider.value()) # initialize the label
         gain_slider.sliderMoved.connect(update_gain_label)
         layout.addWidget(gain_slider, 6, 0)
         layout.addWidget(gain_label, 6, 1)
@@ -307,20 +305,12 @@ class MainWindow(QMainWindow):
 
         def end_of_run_callback():
             QTimer.singleShot(0, worker.run) # Run worker again immediately
-        
-        # This only runs once, at init
-        def populate_gains(valid_gains_db):
-            gain_slider.setRange(0, len(valid_gains_db) - 1) # there's no easy way to make the interval not be 1... 
-            gain_slider.setValue(len(valid_gains_db) - 1) # highest gain index
-            self.valid_gains_db = valid_gains_db
-            update_gain_label(gain_slider.value()) # initialize the label
 
         # connect the signal to the callback
         worker.time_plot_update.connect(time_plot_callback) 
         worker.freq_plot_update.connect(freq_plot_callback)
         worker.waterfall_plot_update.connect(waterfall_plot_callback)
         worker.end_of_run.connect(end_of_run_callback)
-        worker.populate_gains.connect(populate_gains)
 
         self.sdr_thread.started.connect(worker.run) # kicks off the worker when the thread starts
         self.sdr_thread.start()
