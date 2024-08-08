@@ -9,19 +9,31 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("HamWow")
-        self.setFixedSize(QSize(1500, 1000)) # window size, starting size should fit on 1920 x 1080
-
+        #########
+        # State #
+        #########
         self.spectrogram_min = 0
         self.spectrogram_max = 0
 
+        ############
+        # GUI Init #
+        ############
+        self.setWindowTitle("HamWow")
+        self.setFixedSize(QSize(1500, 1000)) # window size, starting size should fit on 1920 x 1080
         layout = QGridLayout() # overall layout
 
-        # Initialize worker and thread
+        ###################
+        # SDR Thread Init #
+        ###################
         self.sdr_thread = QThread()
         self.sdr_thread.setObjectName('SDR_Thread') # so we can see it in htop, note you have to hit F2 -> Display options -> Show custom thread names
         worker = SDRWorker()
         worker.moveToThread(self.sdr_thread)
+        self.sdr_thread.started.connect(worker.run) # kicks off the worker when the thread starts
+
+        ################
+        # GUI Elements #
+        ################
 
         # Time plot
         time_plot = pg.PlotWidget(labels={'left': 'Amplitude', 'bottom': 'Time [microseconds]'})
@@ -153,7 +165,10 @@ class MainWindow(QMainWindow):
         central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)
 
-        # Signals and slots stuff
+        #####################
+        # Signals and Slots #
+        #####################
+
         def time_plot_callback(samples):
             time_plot_curve_i.setData(samples.real)
             time_plot_curve_q.setData(samples.imag)
@@ -180,5 +195,4 @@ class MainWindow(QMainWindow):
         worker.waterfall_plot_update.connect(waterfall_plot_callback)
         worker.end_of_run.connect(end_of_run_callback)
 
-        self.sdr_thread.started.connect(worker.run) # kicks off the worker when the thread starts
         self.sdr_thread.start()
