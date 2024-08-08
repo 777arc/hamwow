@@ -8,17 +8,6 @@ from rtlsdr import RtlSdr
 from scipy.signal import resample_poly, firwin, bilinear, lfilter
 import pyaudio
  
-# Defaults
-fft_size = 4096
-buffer_size = int(100e3) # number of samples processed at a time for demod and such
-num_rows = 200
-center_freq = 99.5e6
-#sample_rates = [3.2, 2.8, 2.56, 2.048, 1.2, 1.024] # MHz
-sample_rates = [1.024] # MHz
-sample_rate = sample_rates[0] * 1e6
-time_plot_samples = 500
-gain = 50 # 0 to 73 dB. int
-
 class SDRWorker(QObject):
     # PyQt Signals
     time_plot_update = pyqtSignal(np.ndarray)
@@ -27,12 +16,19 @@ class SDRWorker(QObject):
     end_of_run = pyqtSignal() # happens many times a second
     populate_gains = pyqtSignal(list)
 
+    # Defaults
+    fft_size = 4096
+    buffer_size = int(100e3) # number of samples processed at a time for demod and such
+    num_rows = 200
+    #sample_rates = [3.2, 2.8, 2.56, 2.048, 1.2, 1.024] # MHz
+    sample_rates = [1.024] # temporary, and in MHz
+    time_plot_samples = 500
+    gain = 50 # 0 to 73 dB. int
+
     # State
     spectrogram = -50*np.ones((fft_size, num_rows))
     PSD_avg = -50*np.ones(fft_size)
     demod_freq_khz = 0 # does not include center_freq
-    bz, az = bilinear(1, [75e-6, 1], fs=sample_rate) # De-emphasis filter, H(s) = 1/(RC*s + 1), implemented as IIR via bilinear transform
-    h_lowpass = firwin(51, cutoff=50e3, fs=sample_rate)
     sample_count = 0
     start_tt = time.time()
     audio_buffer_read_pointer = 0
@@ -57,8 +53,8 @@ class SDRWorker(QObject):
         super(SDRWorker, self).__init__()
         # Init SDR
         self.sdr = RtlSdr()
-        self.sdr.sample_rate = sample_rate
-        self.sdr.center_freq = center_freq
+        self.sdr.sample_rate = self.sample_rates[0]*1e6
+        self.sdr.center_freq = 99.5e6
         self.sdr.gain = self.sdr.valid_gains_db[-1] # max gain
         p = pyaudio.PyAudio()
         self.stream = p.open(format=pyaudio.paFloat32,
@@ -77,8 +73,8 @@ class SDRWorker(QObject):
         self.sdr.gain = self.sdr.valid_gains_db[val]
 
     def update_sample_rate(self, val):
-        print("Updated sample rate to:", sample_rates[val], 'MHz')
-        self.sdr.sample_rate = sample_rates[val] * 1e6
+        print("Updated sample rate to:", self.sample_rates[val], 'MHz')
+        self.sdr.sample_rate = self.sample_rates[val] * 1e6
     
     def update_demod_freq(self, val):
         self.demod_freq_khz = val
@@ -91,15 +87,15 @@ class SDRWorker(QObject):
             self.populate_gains.emit(self.sdr.valid_gains_db)
             self.first_run = False
                 
-        samples = self.sdr.read_samples(buffer_size)
+        samples = self.sdr.read_samples(self.buffer_size)
         self.sample_count += len(samples)
         #print("Current rate:", self.sample_count/(time.time() - self.start_tt))
 
         #self.time_plot_update.emit(samples[0:time_plot_samples]/2**11) # make it go from -1 to 1 at highest gain
-        self.time_plot_update.emit(samples[0:time_plot_samples])
+        self.time_plot_update.emit(samples[0:self.time_plot_samples])
         
-        #PSD = 10.0*np.log10(np.abs(np.fft.fftshift(np.fft.fft(samples)))**2/(fft_size*sample_rate))
-        PSD = 10.0*np.log10(np.abs(np.fft.fftshift(np.fft.fft(samples[0:fft_size])))**2/fft_size)
+        #PSD = 10.0*np.log10(np.abs(np.fft.fftshift(np.fft.fft(samples)))**2/(fft_size*self.sdr.sample_rate))
+        PSD = 10.0*np.log10(np.abs(np.fft.fftshift(np.fft.fft(samples[0:self.fft_size])))**2/self.fft_size)
         self.PSD_avg = self.PSD_avg * 0.99 + PSD * 0.01
         self.freq_plot_update.emit(self.PSD_avg)
     
@@ -108,11 +104,13 @@ class SDRWorker(QObject):
         self.waterfall_plot_update.emit(self.spectrogram)
 
         # Demod FM
-        samples_demod = samples * np.exp(-2j*np.pi*self.demod_freq_khz*1e3*np.arange(buffer_size)/sample_rate) # freq shift
-        samples_demod = np.convolve(samples_demod, self.h_lowpass, 'same') # Low pass filter
+        samples_demod = samples * np.exp(-2j*np.pi*self.demod_freq_khz*1e3*np.arange(self.buffer_size)/self.sdr.sample_rate) # freq shift
+        h_lowpass = firwin(51, cutoff=50e3, fs=self.sdr.sample_rate)
+        samples_demod = np.convolve(samples_demod, h_lowpass, 'same') # Low pass filter
         samples_demod = samples_demod[::4] # decimate, simply to zoom into the signal
         samples_demod = np.diff(np.unwrap(np.angle(samples_demod))) # FM demod
-        samples_demod = lfilter(self.bz, self.az, samples_demod) # apply de-emphasis filter
+        bz, az = bilinear(1, [75e-6, 1], fs=self.sdr.sample_rate) # De-emphasis filter, H(s) = 1/(RC*s + 1), implemented as IIR via bilinear transform
+        samples_demod = lfilter(bz, az, samples_demod) # apply de-emphasis filter
         samples_demod = samples_demod[::6] # decimate by 6 to get mono audio
         sample_rate_audio = self.sdr.sample_rate/6/4
         #print("Sample rate audio:", sample_rate_audio)
@@ -186,7 +184,7 @@ class MainWindow(QMainWindow):
         freq_plot = pg.PlotWidget(labels={'left': 'PSD', 'bottom': 'Frequency [MHz]'})
         freq_plot.setMouseEnabled(x=False, y=True)
         freq_plot_curve = freq_plot.plot([]) 
-        freq_plot.setXRange(center_freq/1e6 - sample_rate/2e6, center_freq/1e6 + sample_rate/2e6)
+        freq_plot.setXRange(worker.sdr.center_freq/1e6 - worker.sdr.sample_rate/2e6, worker.sdr.center_freq/1e6 + worker.sdr.sample_rate/2e6)
         freq_plot.setYRange(-60, -20)
         layout.addWidget(freq_plot, 2, 0)
         
@@ -226,7 +224,7 @@ class MainWindow(QMainWindow):
         # Freq slider with label, all units in kHz
         freq_slider = QSlider(Qt.Orientation.Horizontal)
         freq_slider.setRange(int(13e3), int(1.75e6)) # in kHz
-        freq_slider.setValue(int(center_freq/1e3))
+        freq_slider.setValue(int(worker.sdr.center_freq/1e3))
         freq_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
         freq_slider.setTickInterval(int(1e6))
         freq_slider.sliderMoved.connect(worker.update_freq) # there's also a valueChanged option
@@ -253,12 +251,12 @@ class MainWindow(QMainWindow):
 
         # Sample rate dropdown using QComboBox
         sample_rate_combobox = QComboBox()
-        sample_rate_combobox.addItems([str(x) + ' MHz' for x in sample_rates])
+        sample_rate_combobox.addItems([str(x) + ' MHz' for x in worker.sample_rates])
         sample_rate_combobox.setCurrentIndex(0) # should match the default at the top
         sample_rate_combobox.currentIndexChanged.connect(worker.update_sample_rate)
         sample_rate_label = QLabel()
         def update_sample_rate_label(val):
-            sample_rate_label.setText("Sample Rate: " + str(sample_rates[val]) + " MHz")
+            sample_rate_label.setText("Sample Rate: " + str(worker.sample_rates[val]) + " MHz")
         sample_rate_combobox.currentIndexChanged.connect(update_sample_rate_label)
         update_sample_rate_label(sample_rate_combobox.currentIndex()) # initialize the label
         layout.addWidget(sample_rate_combobox, 7, 0)
@@ -296,9 +294,9 @@ class MainWindow(QMainWindow):
         
         def freq_plot_callback(PSD_avg):
             # TODO figure out if there's a way to just change the visual ticks instead of the actual x vals
-            f = np.linspace(freq_slider.value()*1e3 - sample_rate/2.0, freq_slider.value()*1e3 + sample_rate/2.0, fft_size) / 1e6
+            f = np.linspace(freq_slider.value()*1e3 - worker.sdr.sample_rate/2.0, freq_slider.value()*1e3 + worker.sdr.sample_rate/2.0, worker.fft_size) / 1e6
             freq_plot_curve.setData(f, PSD_avg)
-            freq_plot.setXRange(freq_slider.value()*1e3/1e6 - sample_rate/2e6, freq_slider.value()*1e3/1e6 + sample_rate/2e6)
+            freq_plot.setXRange(freq_slider.value()*1e3/1e6 - worker.sdr.sample_rate/2e6, freq_slider.value()*1e3/1e6 + worker.sdr.sample_rate/2e6)
         
         def waterfall_plot_callback(spectrogram):
             imageitem.setImage(spectrogram, autoLevels=False)
