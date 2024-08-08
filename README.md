@@ -1,3 +1,5 @@
+# Run Tests
+
 Run unit tests with `python -m pytest`
 
 # Building
@@ -8,6 +10,13 @@ Run unit tests with `python -m pytest`
 pip install -r requirements.txt
 pip install pyrtlsdrlib
 ```
+
+Create portable .exe with:
+```
+pip install pyinstaller
+python -m PyInstaller -F main.py
+```
+The .exe will be in /dist
 
 ## Ubuntu
 
