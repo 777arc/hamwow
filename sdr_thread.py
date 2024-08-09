@@ -84,6 +84,10 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
                              output=True,
                              frames_per_buffer=100, # determines how many samples the callback function asks for each time
                              stream_callback=self.audio_callback)
+        
+        # Init DSP
+        self.fm_demod = fm_demod(self.sdr.sample_rate)
+
     # PyQt Slots
     def update_freq(self, val): # TODO: WE COULD JUST MODIFY THE SDR IN THE GUI THREAD
         print("Updated freq to:", val, 'kHz')
@@ -128,7 +132,7 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
         samples_shifted = samples * np.exp(-2j*np.pi*self.demod_freq_khz*1e3*np.arange(len(samples))/self.sdr.sample_rate) # freq shift
 
         # Demod FM
-        samples_demod, new_sample_rate = fm_demod(samples_shifted, self.sdr.sample_rate)
+        samples_demod, new_sample_rate = self.fm_demod.process(samples_shifted)
 
         # Play audio
         #samples_demod /= np.max(np.abs(samples_demod)) # normalize volume so its between -1 and +1
