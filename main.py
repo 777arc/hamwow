@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import QApplication
 import signal # lets control-C actually close the app
 from main_window import MainWindow
+import sys
 
 app = QApplication([])
 window = MainWindow()

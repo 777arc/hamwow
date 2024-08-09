@@ -33,6 +33,7 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
     audio_buffer_read_pointer = 0
     audio_buffer_write_pointer = 0
     audio_buffer = np.zeros(int(100e6), dtype=np.float32)
+    kill_signal = False
     
     # Note- this gets called automatically by PyAudio when the stream is started, and it doesnt block the run() calls
     def audio_callback(self, in_data, frame_count, time_info, status):
@@ -48,20 +49,21 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
         output_bytes = samples_to_play.tobytes() # explicitly convert to bytes sequence, sample values must be in range [-1.0, 1.0]
         return (output_bytes, pyaudio.paContinue)
 
-    async def sdr_callback(self):
+    async def rtl_callback(self):
         async for samples in self.sdr.stream():
-            if(len(self.samples_batches) < 10):  
+            if self.kill_signal:
+                print("Killing RTL callback")
+                break
+            if len(self.samples_batches) < 10:  
                 self.samples_batches.append(samples)
             else:
                 print("Samples buffer full, either window was closed, or sample rate is too high for amount of DSP")
-                break
-        await self.sdr.stop()
-
+        self.sdr.stop()
+        
     def rtl_thread_worker(self):
-        #self.sdr.read_samples_async(self.sdr_callback, self.buffer_size) # blocking, needs to run in a seperate thread
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        loop.run_until_complete(self.sdr_callback()) # blocking
+        loop.run_until_complete(self.rtl_callback()) # blocking
 
     def __init__(self):
         super(SDRWorker, self).__init__()
@@ -74,8 +76,8 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
         self.rtl_thread.start()
 
         # Init audio
-        p = pyaudio.PyAudio()
-        self.stream = p.open(format=pyaudio.paFloat32,
+        self.p = pyaudio.PyAudio()
+        self.audio_stream = self.p.open(format=pyaudio.paFloat32,
                              channels=1,
                              rate=42666,
                              output=True,
@@ -133,12 +135,8 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
             print("Audio saturated")
             samples_demod *= 0.5
         samples_demod = samples_demod.astype(np.float32)
-        #print(len(samples_demod))
-        #output_bytes = samples_demod.tobytes() # explicitly convert to bytes sequence, sample values must be in range [-1.0, 1.0]
-        #stream.write(output_bytes)
         self.audio_buffer[self.audio_buffer_write_pointer:self.audio_buffer_write_pointer+len(samples_demod)] = samples_demod
         self.audio_buffer_write_pointer += len(samples_demod)
-        #print("Write pointer:", self.audio_buffer_write_pointer)
 
         # Hacky way to deal with buffer filling up, which will happen after several minutes
         if self.audio_buffer_write_pointer > len(self.audio_buffer) - len(samples_demod):
@@ -150,12 +148,9 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
         self.end_of_run.emit() # emit the signal to keep the loop going
 
     def stop(self): # gets triggered by self.worker.stop()
-        self.stream.close()
+        self.kill_signal = True # used to stop the RTL thread
+        self.audio_stream.close()
+        self.p.terminate() # Release PortAudio system resources
         print("Stopped audio stream")
-        self.rtl_thread.join()
+        self.rtl_thread.join() # waits for RTL thread to end on its own
         print("RTL thread stopped")
-        self.sdr.close()
-        print("SDR Thread Stopped")
-
-        
-        

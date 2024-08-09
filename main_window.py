@@ -3,7 +3,9 @@ from PyQt6.QtWidgets import QMainWindow, QGridLayout, QWidget, QSpacerItem, QSli
 import pyqtgraph as pg # tested with pyqtgraph==0.13.7
 import numpy as np
 from sdr_thread import SDRWorker
- 
+import time
+import sys
+
 # Subclass QMainWindow to customize your application's main window
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -211,7 +213,10 @@ class MainWindow(QMainWindow):
 
         self.sdr_thread.start() # not blocking
 
-    def closeEvent(self, event):
+    def closeEvent(self, event): # gets called when you close the window
+        self.worker.end_of_run.disconnect() # stop running the run() function
+        #self.worker.end_of_run.connect(self.sdr_thread.quit) # quit the thread when the run() function is done
+        time.sleep(0.3) # give time for the next run() to finish
         self.worker.stop()
         self.sdr_thread.quit()
         self.sdr_thread.wait()
