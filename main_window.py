@@ -1,5 +1,5 @@
 from PyQt6.QtCore import QSize, Qt, QThread, QTimer
-from PyQt6.QtWidgets import QMainWindow, QGridLayout, QWidget, QSlider, QLabel, QHBoxLayout, QVBoxLayout, QPushButton, QComboBox  # tested with PyQt6==6.7.0
+from PyQt6.QtWidgets import QMainWindow, QGridLayout, QWidget, QSpacerItem, QSlider, QLabel, QHBoxLayout, QVBoxLayout, QPushButton, QComboBox, QProgressBar  # tested with PyQt6==6.7.0
 import pyqtgraph as pg # tested with pyqtgraph==0.13.7
 import numpy as np
 from sdr_thread import SDRWorker
@@ -161,6 +161,15 @@ class MainWindow(QMainWindow):
         layout.addWidget(demod_freq_slider, 9, 0)
         layout.addWidget(demod_freq_label, 9, 1)
 
+        # Realtime ratio bar
+        progress_bar_layout = QHBoxLayout()
+        layout.addLayout(progress_bar_layout, 10, 0)
+        progress_bar = QProgressBar()
+        progress_bar.setValue(50)
+        progress_bar_layout.addWidget(QLabel("Realtime Ratio:"))
+        progress_bar_layout.addWidget(progress_bar)
+        progress_bar_layout.addItem(QSpacerItem(1000, 10))
+
         central_widget = QWidget()
         central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)
@@ -185,6 +194,9 @@ class MainWindow(QMainWindow):
             mean = np.mean(spectrogram) 
             self.spectrogram_min = mean - 2*sigma # save to window state
             self.spectrogram_max = mean + 2*sigma
+        
+        def progress_bar_callback(realtime_ratio):
+            progress_bar.setValue(int(realtime_ratio * 100))
 
         def end_of_run_callback():
             QTimer.singleShot(0, worker.run) # Run worker again immediately
@@ -193,6 +205,7 @@ class MainWindow(QMainWindow):
         worker.time_plot_update.connect(time_plot_callback) 
         worker.freq_plot_update.connect(freq_plot_callback)
         worker.waterfall_plot_update.connect(waterfall_plot_callback)
+        worker.progress_bar_update.connect(progress_bar_callback)
         worker.end_of_run.connect(end_of_run_callback)
 
         self.sdr_thread.start()

@@ -11,6 +11,7 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
     time_plot_update = pyqtSignal(np.ndarray)
     freq_plot_update = pyqtSignal(np.ndarray)
     waterfall_plot_update = pyqtSignal(np.ndarray)
+    progress_bar_update = pyqtSignal(float)
     end_of_run = pyqtSignal() # happens many times a second
 
     # Defaults
@@ -26,12 +27,13 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
     spectrogram = -50*np.ones((fft_size, num_rows))
     PSD_avg = -50*np.ones(fft_size)
     demod_freq_khz = 0 # does not include center_freq
-    sample_count = 0
-    start_tt = time.time()
+    sample_read_timer = time.time()
+    realtime_ratio = 0
     audio_buffer_read_pointer = 0
     audio_buffer_write_pointer = 0
     audio_buffer = np.zeros(int(100e6), dtype=np.float32)
     
+    # Note- this gets called automatically by PyAudio when the stream is started, and it doesnt block the run() calls
     def audio_callback(self, in_data, frame_count, time_info, status):
         #print("GOT HERE, frame_count:", frame_count)
         # If len(data) is less than requested frame_count, PyAudio automatically assumes the stream is finished, and the stream stops.
@@ -80,9 +82,10 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
         start_t = time.time()
 
         samples = self.sdr.read_samples(self.buffer_size)
-        self.sample_count += len(samples)
-        #print("Current rate:", self.sample_count/(time.time() - self.start_tt))
-
+        self.realtime_ratio = len(samples) / ((time.time() - self.sample_read_timer) * self.sdr.sample_rate)
+        self.sample_read_timer = time.time()
+        self.progress_bar_update.emit(self.realtime_ratio)
+        
         #self.time_plot_update.emit(samples[0:time_plot_samples]/2**11) # make it go from -1 to 1 at highest gain
         self.time_plot_update.emit(samples[0:self.time_plot_samples])
         
