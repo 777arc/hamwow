@@ -209,3 +209,7 @@ class MainWindow(QMainWindow):
         worker.end_of_run.connect(end_of_run_callback)
 
         self.sdr_thread.start()
+        
+    def closeEvent(self, event):
+        print("Window Closed...")
+        self.sdr_thread

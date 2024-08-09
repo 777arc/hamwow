@@ -19,8 +19,8 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
     buffer_size = int(100e3) # requested (not always met perfectly) number of samples processed at a time for demod and such
     samples_batches = []
     num_rows = 200
-    #sample_rates = [3.2, 2.8, 2.56, 2.048, 1.2, 1.024] # MHz
-    sample_rates = [1.024] # temporary, and in MHz
+    sample_rates = [1.024, 3.2, 2.8, 2.56, 2.048, 1.2, 1.024] # MHz
+    # sample_rates = [1.024] # temporary, and in MHz
     time_plot_samples = 500
     gain = 50 # 0 to 73 dB. int
 
@@ -49,10 +49,14 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
         return (output_bytes, pyaudio.paContinue)
     
     def sdr_callback(self, samples, context):
-        self.samples_batches.append(samples)
+        if(len(self.samples_batches) < 10):  
+            self.samples_batches.append(samples)
+        else:
+            print("Samples buffer full, dropping samples")
 
     def rtl_thread_worker(self):
         self.sdr.read_samples_async(self.sdr_callback, self.buffer_size) # blocking, needs to run in a seperate thread
+        print("shabadee")
 
     def __init__(self):
         super(SDRWorker, self).__init__()
@@ -61,8 +65,8 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
         self.sdr.sample_rate = self.sample_rates[0]*1e6
         self.sdr.center_freq = 99.5e6
         self.sdr.gain = self.sdr.valid_gains_db[-1] # max gain
-        rtl_thread = Thread(target = self.rtl_thread_worker, args = ())
-        rtl_thread.start()
+        self.rtl_thread = Thread(target = self.rtl_thread_worker, args = ())
+        self.rtl_thread.start()
 
         # Init audio
         p = pyaudio.PyAudio()
@@ -139,3 +143,11 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
 
         #print("Frames per second:", 1/(time.time() - start_t))
         self.end_of_run.emit() # emit the signal to keep the loop going
+        
+    def __del__(self):
+        self.stream.stop_stream()
+        self.stream.close()
+        self.sdr.close()
+        self.rtl_thread.join()
+        self.sdr.close()
+        print("SDRWorker destroyed")
