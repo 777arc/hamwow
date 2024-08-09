@@ -13,6 +13,7 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
     freq_plot_update = pyqtSignal(np.ndarray)
     waterfall_plot_update = pyqtSignal(np.ndarray)
     progress_bar_update = pyqtSignal(float)
+    buffer_bar_update = pyqtSignal(int)
     end_of_run = pyqtSignal() # happens many times a second
 
     # Defaults
@@ -54,7 +55,7 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
             if self.kill_signal:
                 print("Killing RTL callback")
                 break
-            if len(self.samples_batches) < 10:  
+            if len(self.samples_batches) < 100: # keep this at 100 so it aligns with the buffer bar max value of 100
                 self.samples_batches.append(samples)
             else:
                 print("Samples buffer full, either window was closed, or sample rate is too high for amount of DSP")
@@ -106,8 +107,9 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
         # Wait until a batch of samples is available to process, only process 1 batch at a time, per call to run()
         while len(self.samples_batches) == 0:
             time.sleep(0.01)
+        self.buffer_bar_update.emit(len(self.samples_batches)) # update buffer bar
         samples = self.samples_batches.pop(0) # grab oldest batch of samples
-
+        
         self.realtime_ratio = len(samples) / ((time.time() - self.sample_read_timer) * self.sdr.sample_rate)
         self.sample_read_timer = time.time()
         self.progress_bar_update.emit(self.realtime_ratio)

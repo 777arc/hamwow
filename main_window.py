@@ -168,10 +168,17 @@ class MainWindow(QMainWindow):
         progress_bar_layout = QHBoxLayout()
         layout.addLayout(progress_bar_layout, 10, 0)
         progress_bar = QProgressBar()
-        progress_bar.setValue(50)
         progress_bar_layout.addWidget(QLabel("Realtime Ratio:"))
         progress_bar_layout.addWidget(progress_bar)
         progress_bar_layout.addItem(QSpacerItem(1000, 10))
+
+        # Buffer indicator bar
+        buffer_bar_layout = QHBoxLayout()
+        layout.addLayout(buffer_bar_layout, 11, 0)
+        buffer_bar = QProgressBar()
+        buffer_bar_layout.addWidget(QLabel("Buffer Fullness:"))
+        buffer_bar_layout.addWidget(buffer_bar)
+        buffer_bar_layout.addItem(QSpacerItem(1000, 10))
 
         central_widget = QWidget()
         central_widget.setLayout(layout)
@@ -197,19 +204,14 @@ class MainWindow(QMainWindow):
             mean = np.mean(spectrogram) 
             self.spectrogram_min = mean - 2*sigma # save to window state
             self.spectrogram_max = mean + 2*sigma
-        
-        def progress_bar_callback(realtime_ratio):
-            progress_bar.setValue(int(realtime_ratio * 100))
-
-        def end_of_run_callback():
-            QTimer.singleShot(0, worker.run) # Run worker again immediately
 
         # connect the signal to the callback
         worker.time_plot_update.connect(time_plot_callback) 
         worker.freq_plot_update.connect(freq_plot_callback)
         worker.waterfall_plot_update.connect(waterfall_plot_callback)
-        worker.progress_bar_update.connect(progress_bar_callback)
-        worker.end_of_run.connect(end_of_run_callback)
+        worker.progress_bar_update.connect(lambda x: progress_bar.setValue(int(x * 100)))
+        worker.buffer_bar_update.connect(lambda x: buffer_bar.setValue(x))
+        worker.end_of_run.connect(lambda : QTimer.singleShot(0, worker.run)) # Run worker again immediately
 
         self.sdr_thread.start() # not blocking
 
