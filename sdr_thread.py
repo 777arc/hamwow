@@ -5,6 +5,7 @@ from rtlsdr import RtlSdr
 import pyaudio
 from demods.fm import fm_demod
 from threading import Thread
+import asyncio
 
 class SDRWorker(QObject): # A QThread gets created in main_window which is assigned to this worker
     # PyQt Signals
@@ -19,8 +20,7 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
     buffer_size = int(100e3) # requested (not always met perfectly) number of samples processed at a time for demod and such
     samples_batches = []
     num_rows = 200
-    sample_rates = [1.024, 3.2, 2.8, 2.56, 2.048, 1.2, 1.024] # MHz
-    # sample_rates = [1.024] # temporary, and in MHz
+    sample_rates = [1.024, 3.2, 2.8, 2.56, 2.048, 1.2] # MHz
     time_plot_samples = 500
     gain = 50 # 0 to 73 dB. int
 
@@ -47,16 +47,21 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
         #print("Read pointer:", self.audio_buffer_read_pointer)
         output_bytes = samples_to_play.tobytes() # explicitly convert to bytes sequence, sample values must be in range [-1.0, 1.0]
         return (output_bytes, pyaudio.paContinue)
-    
-    def sdr_callback(self, samples, context):
-        if(len(self.samples_batches) < 10):  
-            self.samples_batches.append(samples)
-        else:
-            print("Samples buffer full, dropping samples")
+
+    async def sdr_callback(self):
+        async for samples in self.sdr.stream():
+            if(len(self.samples_batches) < 10):  
+                self.samples_batches.append(samples)
+            else:
+                print("Samples buffer full, either window was closed, or sample rate is too high for amount of DSP")
+                break
+        await self.sdr.stop()
 
     def rtl_thread_worker(self):
-        self.sdr.read_samples_async(self.sdr_callback, self.buffer_size) # blocking, needs to run in a seperate thread
-        print("shabadee")
+        #self.sdr.read_samples_async(self.sdr_callback, self.buffer_size) # blocking, needs to run in a seperate thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(self.sdr_callback()) # blocking
 
     def __init__(self):
         super(SDRWorker, self).__init__()
@@ -143,11 +148,14 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
 
         #print("Frames per second:", 1/(time.time() - start_t))
         self.end_of_run.emit() # emit the signal to keep the loop going
-        
-    def __del__(self):
-        self.stream.stop_stream()
+
+    def stop(self): # gets triggered by self.worker.stop()
         self.stream.close()
-        self.sdr.close()
+        print("Stopped audio stream")
         self.rtl_thread.join()
+        print("RTL thread stopped")
         self.sdr.close()
-        print("SDRWorker destroyed")
+        print("SDR Thread Stopped")
+
+        
+        

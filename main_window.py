@@ -28,6 +28,7 @@ class MainWindow(QMainWindow):
         self.sdr_thread = QThread()
         self.sdr_thread.setObjectName('SDR_Thread') # so we can see it in htop, note you have to hit F2 -> Display options -> Show custom thread names
         worker = SDRWorker()
+        self.worker = worker
         worker.moveToThread(self.sdr_thread)
         self.sdr_thread.started.connect(worker.run) # kicks off the worker when the thread starts
 
@@ -208,8 +209,10 @@ class MainWindow(QMainWindow):
         worker.progress_bar_update.connect(progress_bar_callback)
         worker.end_of_run.connect(end_of_run_callback)
 
-        self.sdr_thread.start()
-        
+        self.sdr_thread.start() # not blocking
+
     def closeEvent(self, event):
-        print("Window Closed...")
-        self.sdr_thread
+        self.worker.stop()
+        self.sdr_thread.quit()
+        self.sdr_thread.wait()
+

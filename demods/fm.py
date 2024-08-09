@@ -2,12 +2,12 @@ import numpy as np
 from scipy.signal import firwin, bilinear, lfilter
 
 def fm_demod(x, sample_rate):
-    # h_lowpass = firwin(51, cutoff=50e3, fs=sample_rate)
-    # x = np.convolve(x, h_lowpass, 'same') # Low pass filter
+    h_lowpass = firwin(51, cutoff=50e3, fs=sample_rate)
+    x = np.convolve(x, h_lowpass, 'same') # Low pass filter
     x = x[::4] # decimate, simply to zoom into the signal
     x = np.diff(np.unwrap(np.angle(x))) # FM demod
-    # bz, az = bilinear(1, [75e-6, 1], fs=sample_rate) # De-emphasis filter, H(s) = 1/(RC*s + 1), implemented as IIR via bilinear transform
-    # x = lfilter(bz, az, x) # apply de-emphasis filter
+    bz, az = bilinear(1, [75e-6, 1], fs=sample_rate) # De-emphasis filter, H(s) = 1/(RC*s + 1), implemented as IIR via bilinear transform
+    x = lfilter(bz, az, x) # apply de-emphasis filter
     x = x[::6] # decimate by 6 to get mono audio
     new_sample_rate = sample_rate/6/4
     #print("Sample rate audio:", sample_rate_audio)
