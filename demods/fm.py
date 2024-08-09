@@ -2,7 +2,6 @@ import numpy as np
 from scipy.signal import firwin, bilinear, lfilter, filtfilt, lfilter_zi
 
 class fm_demod():
-
     def __init__(self, sample_rate):
         self.sample_rate = sample_rate
         self.h_lowpass = firwin(51, cutoff=50e3, fs=self.sample_rate)
