@@ -2,10 +2,10 @@ from PyQt6.QtCore import pyqtSignal, QObject
 import numpy as np
 import time
 from rtlsdr import RtlSdr
-from scipy.signal import firwin, bilinear, lfilter
 import pyaudio
 from demods.fm import fm_demod
- 
+from threading import Thread
+
 class SDRWorker(QObject): # A QThread gets created in main_window which is assigned to this worker
     # PyQt Signals
     time_plot_update = pyqtSignal(np.ndarray)
@@ -16,7 +16,8 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
 
     # Defaults
     fft_size = 4096
-    buffer_size = int(100e3) # number of samples processed at a time for demod and such
+    buffer_size = int(100e3) # requested (not always met perfectly) number of samples processed at a time for demod and such
+    samples_batches = []
     num_rows = 200
     #sample_rates = [3.2, 2.8, 2.56, 2.048, 1.2, 1.024] # MHz
     sample_rates = [1.024] # temporary, and in MHz
@@ -46,6 +47,12 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
         #print("Read pointer:", self.audio_buffer_read_pointer)
         output_bytes = samples_to_play.tobytes() # explicitly convert to bytes sequence, sample values must be in range [-1.0, 1.0]
         return (output_bytes, pyaudio.paContinue)
+    
+    def sdr_callback(self, samples, context):
+        self.samples_batches.append(samples)
+
+    def rtl_thread_worker(self):
+        self.sdr.read_samples_async(self.sdr_callback, self.buffer_size) # blocking, needs to run in a seperate thread
 
     def __init__(self):
         super(SDRWorker, self).__init__()
@@ -54,6 +61,10 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
         self.sdr.sample_rate = self.sample_rates[0]*1e6
         self.sdr.center_freq = 99.5e6
         self.sdr.gain = self.sdr.valid_gains_db[-1] # max gain
+        rtl_thread = Thread(target = self.rtl_thread_worker, args = ())
+        rtl_thread.start()
+
+        # Init audio
         p = pyaudio.PyAudio()
         self.stream = p.open(format=pyaudio.paFloat32,
                              channels=1,
@@ -81,15 +92,17 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
     def run(self):
         start_t = time.time()
 
-        samples = self.sdr.read_samples(self.buffer_size)
+        # Wait until a batch of samples is available to process, only process 1 batch at a time, per call to run()
+        while len(self.samples_batches) == 0:
+            time.sleep(0.01)
+        samples = self.samples_batches.pop(0) # grab oldest batch of samples
+
         self.realtime_ratio = len(samples) / ((time.time() - self.sample_read_timer) * self.sdr.sample_rate)
         self.sample_read_timer = time.time()
         self.progress_bar_update.emit(self.realtime_ratio)
         
-        #self.time_plot_update.emit(samples[0:time_plot_samples]/2**11) # make it go from -1 to 1 at highest gain
         self.time_plot_update.emit(samples[0:self.time_plot_samples])
         
-        #PSD = 10.0*np.log10(np.abs(np.fft.fftshift(np.fft.fft(samples)))**2/(fft_size*self.sdr.sample_rate))
         PSD = 10.0*np.log10(np.abs(np.fft.fftshift(np.fft.fft(samples[0:self.fft_size])))**2/self.fft_size)
         self.PSD_avg = self.PSD_avg * 0.99 + PSD * 0.01
         self.freq_plot_update.emit(self.PSD_avg)
@@ -99,7 +112,7 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
         self.waterfall_plot_update.emit(self.spectrogram)
 
         # Freq shift
-        samples_shifted = samples * np.exp(-2j*np.pi*self.demod_freq_khz*1e3*np.arange(self.buffer_size)/self.sdr.sample_rate) # freq shift
+        samples_shifted = samples * np.exp(-2j*np.pi*self.demod_freq_khz*1e3*np.arange(len(samples))/self.sdr.sample_rate) # freq shift
 
         # Demod FM
         samples_demod, new_sample_rate = fm_demod(samples_shifted, self.sdr.sample_rate)
