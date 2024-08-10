@@ -1,9 +1,11 @@
 from PyQt6.QtCore import QSize, Qt, QThread, QTimer
-from PyQt6.QtWidgets import QMainWindow, QGridLayout, QWidget, QSpacerItem, QSlider, QLabel, QHBoxLayout, QVBoxLayout, QPushButton, QComboBox, QProgressBar  # tested with PyQt6==6.7.0
+from PyQt6.QtWidgets import QMainWindow, QGridLayout, QGraphicsRectItem, QWidget, QSpacerItem, QSlider, QLabel, QHBoxLayout, QVBoxLayout, QPushButton, QComboBox, QProgressBar  # tested with PyQt6==6.7.0
 import pyqtgraph as pg # tested with pyqtgraph==0.13.7
 import numpy as np
 from sdr_thread import SDRWorker
- 
+import time
+import sys
+
 # Subclass QMainWindow to customize your application's main window
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -28,6 +30,7 @@ class MainWindow(QMainWindow):
         self.sdr_thread = QThread()
         self.sdr_thread.setObjectName('SDR_Thread') # so we can see it in htop, note you have to hit F2 -> Display options -> Show custom thread names
         worker = SDRWorker()
+        self.worker = worker
         worker.moveToThread(self.sdr_thread)
         self.sdr_thread.started.connect(worker.run) # kicks off the worker when the thread starts
 
@@ -142,9 +145,6 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(QLabel('Demod Settings:'), 8, 0)
 
-        # Demod line on freq_plot
-        demod_line = freq_plot.addLine(x=100, y=None, pen={'color':'green', 'width':1.5})
-
         # Demod Freq slider with label, all units in kHz
         demod_freq_slider = QSlider(Qt.Orientation.Horizontal)
         demod_freq_slider.setRange(int(-2e3), int(2e3)) # in kHz, based on max sample rate
@@ -153,9 +153,15 @@ class MainWindow(QMainWindow):
         demod_freq_slider.setTickInterval(int(0.1e3))
         demod_freq_slider.valueChanged.connect(worker.update_demod_freq)
         demod_freq_label = QLabel()
+        rect_item = QGraphicsRectItem()
+        rect_item.setBrush(pg.mkBrush((0, 0, 255, 100)))
+        rect_item.setPen(pg.mkPen((0, 0, 0), width=0))
+        freq_plot.addItem(rect_item)
+        demod_line = freq_plot.addLine(x=100, y=None, pen={'color':'green', 'width':1.5}) # Demod line on freq_plot
         def update_demod_freq_label(val):
             demod_freq_label.setText("Demod Frequency [kHz]: " + str(val))
             demod_line.setValue(freq_slider.value()/1e3 + val/1e3)
+            rect_item.setRect(freq_slider.value()/1e3 + val/1e3, -100, 0.05, 200) #x,y,width,height
         demod_freq_slider.valueChanged.connect(update_demod_freq_label)
         update_demod_freq_label(demod_freq_slider.value()) # initialize the label
         layout.addWidget(demod_freq_slider, 9, 0)
@@ -165,10 +171,17 @@ class MainWindow(QMainWindow):
         progress_bar_layout = QHBoxLayout()
         layout.addLayout(progress_bar_layout, 10, 0)
         progress_bar = QProgressBar()
-        progress_bar.setValue(50)
         progress_bar_layout.addWidget(QLabel("Realtime Ratio:"))
         progress_bar_layout.addWidget(progress_bar)
         progress_bar_layout.addItem(QSpacerItem(1000, 10))
+
+        # Buffer indicator bar
+        buffer_bar_layout = QHBoxLayout()
+        layout.addLayout(buffer_bar_layout, 11, 0)
+        buffer_bar = QProgressBar()
+        buffer_bar_layout.addWidget(QLabel("Buffer Fullness:"))
+        buffer_bar_layout.addWidget(buffer_bar)
+        buffer_bar_layout.addItem(QSpacerItem(1000, 10))
 
         central_widget = QWidget()
         central_widget.setLayout(layout)
@@ -194,22 +207,22 @@ class MainWindow(QMainWindow):
             mean = np.mean(spectrogram) 
             self.spectrogram_min = mean - 2*sigma # save to window state
             self.spectrogram_max = mean + 2*sigma
-        
-        def progress_bar_callback(realtime_ratio):
-            progress_bar.setValue(int(realtime_ratio * 100))
-
-        def end_of_run_callback():
-            QTimer.singleShot(0, worker.run) # Run worker again immediately
 
         # connect the signal to the callback
         worker.time_plot_update.connect(time_plot_callback) 
         worker.freq_plot_update.connect(freq_plot_callback)
         worker.waterfall_plot_update.connect(waterfall_plot_callback)
-        worker.progress_bar_update.connect(progress_bar_callback)
-        worker.end_of_run.connect(end_of_run_callback)
+        worker.progress_bar_update.connect(lambda x: progress_bar.setValue(int(x * 100)))
+        worker.buffer_bar_update.connect(lambda x: buffer_bar.setValue(x))
+        worker.end_of_run.connect(lambda : QTimer.singleShot(0, worker.run)) # Run worker again immediately
 
-        self.sdr_thread.start()
-        
-    def closeEvent(self, event):
-        print("Window Closed...")
-        self.sdr_thread
+        self.sdr_thread.start() # not blocking
+
+    def closeEvent(self, event): # gets called when you close the window
+        self.worker.end_of_run.disconnect() # stop running the run() function
+        #self.worker.end_of_run.connect(self.sdr_thread.quit) # quit the thread when the run() function is done
+        time.sleep(0.3) # give time for the next run() to finish
+        self.worker.stop()
+        self.sdr_thread.quit()
+        self.sdr_thread.wait()
+
