@@ -26,6 +26,7 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
     sample_rates = [1.024, 3.2, 2.8, 2.56, 2.048, 1.2] # MHz
     time_plot_samples = 500
     gain = 50 # 0 to 73 dB. int
+    direct_sampling = 0 # 0 for superhet, 2 or direct
 
     # State
     spectrogram = -50*np.ones((fft_size, num_rows))
@@ -77,9 +78,6 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
         self.sdr.sample_rate = self.sample_rates[0]*1e6
         self.sdr.center_freq = 99.5e6
         self.sdr.gain = self.sdr.valid_gains_db[-1] # max gain
-        
-        self.sdr.set_direct_sampling(2)
-        
         self.rtl_thread = Thread(target = self.rtl_thread_worker, args = ())
         self.rtl_thread.start()
 
@@ -127,6 +125,10 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
         else:
             print("Turning AGC off")
             self.sdr.gain = self.sdr.valid_gains_db[self.gain]
+    
+    def update_dir_sampling(self, val):
+        self.direct_sampling = val*2
+        self.sdr.set_direct_sampling(val*2)
 
     # Main loop
     def run(self):

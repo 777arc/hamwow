@@ -112,6 +112,11 @@ class MainWindow(QMainWindow):
         update_freq_label(freq_slider.value()) # initialize the label
         layout.addWidget(freq_slider, 5, 0)
         layout.addWidget(freq_label, 5, 1)
+        
+        # SDR Direct Sampling checkbox
+        agc_checkbox = QCheckBox("Direct Sampling", self)
+        agc_checkbox.stateChanged.connect(worker.update_dir_sampling)
+        layout.addWidget(agc_checkbox, 6, 2)
 
         # Gain slider with label
         gain_slider = QSlider(Qt.Orientation.Horizontal)
@@ -127,14 +132,14 @@ class MainWindow(QMainWindow):
             gain_label.setText("Gain: " + str(worker.sdr.valid_gains_db[val]))
         update_gain_label(gain_slider.value()) # initialize the label
         gain_slider.valueChanged.connect(update_gain_label)
-        layout.addWidget(gain_slider, 6, 0)
-        layout.addWidget(gain_label, 6, 1)
+        layout.addWidget(gain_slider, 7, 0)
+        layout.addWidget(gain_label, 7, 1)
 
         # SDR AGC checkbox
         agc_checkbox = QCheckBox("SDR AGC", self)
         agc_checkbox.stateChanged.connect(worker.update_agc)
         agc_checkbox.stateChanged.connect(lambda state: gain_slider.setEnabled(state == 0))
-        layout.addWidget(agc_checkbox, 6, 2)
+        layout.addWidget(agc_checkbox, 8, 2)
 
         # Sample rate dropdown using QComboBox
         sample_rate_combobox = QComboBox()
@@ -146,8 +151,8 @@ class MainWindow(QMainWindow):
             sample_rate_label.setText("Sample Rate: " + str(worker.sample_rates[val]) + " MHz")
         sample_rate_combobox.currentIndexChanged.connect(update_sample_rate_label)
         update_sample_rate_label(sample_rate_combobox.currentIndex()) # initialize the label
-        layout.addWidget(sample_rate_combobox, 7, 0)
-        layout.addWidget(sample_rate_label, 7, 1)
+        layout.addWidget(sample_rate_combobox, 9, 0)
+        layout.addWidget(sample_rate_label, 9, 1)
 
         layout.addWidget(QLabel('Demod Settings:'), 8, 0)
 
@@ -170,12 +175,12 @@ class MainWindow(QMainWindow):
             rect_item.setRect(freq_slider.value()/1e3 + val/1e3, -100, 0.05, 200) #x,y,width,height
         demod_freq_slider.valueChanged.connect(update_demod_freq_label)
         update_demod_freq_label(demod_freq_slider.value()) # initialize the label
-        layout.addWidget(demod_freq_slider, 9, 0)
-        layout.addWidget(demod_freq_label, 9, 1)
+        layout.addWidget(demod_freq_slider, 10, 0)
+        layout.addWidget(demod_freq_label, 10, 1)
 
         # Realtime ratio bar
         progress_bar_layout = QHBoxLayout()
-        layout.addLayout(progress_bar_layout, 10, 0)
+        layout.addLayout(progress_bar_layout, 11, 0)
         progress_bar = QProgressBar()
         progress_bar_layout.addWidget(QLabel("Realtime Ratio:"))
         progress_bar_layout.addWidget(progress_bar)
@@ -183,7 +188,7 @@ class MainWindow(QMainWindow):
 
         # Buffer indicator bar
         buffer_bar_layout = QHBoxLayout()
-        layout.addLayout(buffer_bar_layout, 11, 0)
+        layout.addLayout(buffer_bar_layout, 12, 0)
         buffer_bar = QProgressBar()
         buffer_bar_layout.addWidget(QLabel("Buffer Fullness:"))
         buffer_bar_layout.addWidget(buffer_bar)
@@ -194,7 +199,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central_widget)
         
         demod_combobox_layout = QHBoxLayout()
-        layout.addLayout(demod_combobox_layout, 12, 0)
+        layout.addLayout(demod_combobox_layout, 13, 0)
         demod_combobox = QComboBox()
         demod_combobox.addItems(['WFM'])
         demod_combobox.addItems(['DSB AM'])
