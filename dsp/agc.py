@@ -22,5 +22,8 @@ class AGC:
         
         x *= self.gain
         
+        # print("Max envelope:", np.max(envelope))
+        # print("Gain:", self.gain)
+        
         return x
         

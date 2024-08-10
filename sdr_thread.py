@@ -6,6 +6,7 @@ import pyaudio
 from demods.fm import fm_demod
 from threading import Thread
 import asyncio
+from dsp.agc import AGC
 
 class SDRWorker(QObject): # A QThread gets created in main_window which is assigned to this worker
     # PyQt Signals
@@ -87,6 +88,9 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
         
         # Init DSP
         self.fm_demod = fm_demod(self.sdr.sample_rate)
+        
+        # AGC
+        self.agc = AGC(self.sdr.sample_rate/24, 10, 20, 0.5)
 
     # PyQt Slots
     def update_freq(self, val): # TODO: WE COULD JUST MODIFY THE SDR IN THE GUI THREAD
@@ -133,6 +137,9 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
 
         # Demod FM
         samples_demod, new_sample_rate = self.fm_demod.process(samples_shifted)
+        
+        # Apply audio AGC
+        samples_demod = self.agc.apply_agc(samples_demod)
 
         # Play audio
         #samples_demod /= np.max(np.abs(samples_demod)) # normalize volume so its between -1 and +1
