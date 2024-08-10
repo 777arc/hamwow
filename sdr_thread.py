@@ -4,6 +4,7 @@ import time
 from rtlsdr import RtlSdr
 import pyaudio
 from demods.fm import fm_demod
+from demods.dsb_am import dsb_am
 from threading import Thread
 import asyncio
 
@@ -29,7 +30,7 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
     spectrogram = -50*np.ones((fft_size, num_rows))
     PSD_avg = -50*np.ones(fft_size)
     demod_freq_khz = 0 # does not include center_freq
-    demod_type = 0 # 0 = WFM, 1 = DSB AM, 2 = USB AM, 3 = LSB AM, 4 = CW
+    demod_type = 'WFM' # WFM, DSB AM, USB AM, LSB AM, CW
     sample_read_timer = time.time()
     realtime_ratio = 0
     audio_buffer_read_pointer = 0
@@ -74,6 +75,9 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
         self.sdr.sample_rate = self.sample_rates[0]*1e6
         self.sdr.center_freq = 99.5e6
         self.sdr.gain = self.sdr.valid_gains_db[-1] # max gain
+        
+        self.sdr.set_direct_sampling(True)
+        
         self.rtl_thread = Thread(target = self.rtl_thread_worker, args = ())
         self.rtl_thread.start()
 
@@ -88,6 +92,7 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
         
         # Init DSP
         self.fm_demod = fm_demod(self.sdr.sample_rate)
+        self.dsb_am_demod = dsb_am(self.sdr.sample_rate)
 
     # PyQt Slots
     def update_freq(self, val): # TODO: WE COULD JUST MODIFY THE SDR IN THE GUI THREAD
@@ -136,8 +141,11 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
         # Freq shift
         samples_shifted = samples * np.exp(-2j*np.pi*self.demod_freq_khz*1e3*np.arange(len(samples))/self.sdr.sample_rate) # freq shift
 
-        # Demod FM
-        samples_demod, new_sample_rate = self.fm_demod.process(samples_shifted)
+        # Demod using selected type
+        if self.demod_type == 'WFM': # WFM
+            samples_demod, new_sample_rate = self.fm_demod.process(samples_shifted)
+        elif self.demod_type == 'DSB AM': # DSB AM
+            samples_demod, new_sample_rate = self.dsb_am_demod.process(samples_shifted)
 
         # Play audio
         #samples_demod /= np.max(np.abs(samples_demod)) # normalize volume so its between -1 and +1
