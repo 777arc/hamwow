@@ -99,7 +99,7 @@ class MainWindow(QMainWindow):
 
         # Freq slider with label, all units in kHz
         freq_slider = QSlider(Qt.Orientation.Horizontal)
-        freq_slider.setRange(int(13e3), int(1.75e6)) # in kHz
+        freq_slider.setRange(int(1e3), int(1.75e6)) # in kHz
         freq_slider.setValue(int(worker.sdr.center_freq/1e3))
         freq_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
         freq_slider.setTickInterval(int(1e6))

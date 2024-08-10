@@ -78,7 +78,7 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
         self.sdr.center_freq = 99.5e6
         self.sdr.gain = self.sdr.valid_gains_db[-1] # max gain
         
-        self.sdr.set_direct_sampling(True)
+        self.sdr.set_direct_sampling(2)
         
         self.rtl_thread = Thread(target = self.rtl_thread_worker, args = ())
         self.rtl_thread.start()
@@ -160,8 +160,6 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
             samples_demod, new_sample_rate = self.fm_demod.process(samples_shifted)
         elif self.demod_type == 'DSB AM': # DSB AM
             samples_demod, new_sample_rate = self.dsb_am_demod.process(samples_shifted)
-        # Demod FM
-        samples_demod, new_sample_rate = self.fm_demod.process(samples_shifted)
         
         # Apply audio AGC
         samples_demod = self.agc.apply_agc(samples_demod)
