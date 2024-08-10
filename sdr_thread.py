@@ -29,6 +29,7 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
     spectrogram = -50*np.ones((fft_size, num_rows))
     PSD_avg = -50*np.ones(fft_size)
     demod_freq_khz = 0 # does not include center_freq
+    demod_type = 0 # 0 = WFM, 1 = DSB AM, 2 = USB AM, 3 = LSB AM, 4 = CW
     sample_read_timer = time.time()
     realtime_ratio = 0
     audio_buffer_read_pointer = 0
@@ -103,6 +104,10 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
     
     def update_demod_freq(self, val):
         self.demod_freq_khz = val
+        
+    def update_demod_type(self, val):
+        self.demod_type = val
+        print("Updated demod type to:", val)
 
     # Main loop
     def run(self):

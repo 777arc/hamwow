@@ -186,6 +186,19 @@ class MainWindow(QMainWindow):
         central_widget = QWidget()
         central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)
+        
+        demod_combobox_layout = QHBoxLayout()
+        layout.addLayout(demod_combobox_layout, 12, 0)
+        demod_combobox = QComboBox()
+        demod_combobox.addItems(['WFM'])
+        demod_combobox.addItems(['DSB AM'])
+        demod_combobox.addItems(['USB AM'])
+        demod_combobox.addItems(['LSB AM'])
+        demod_combobox.addItems(['CW'])
+        demod_combobox.currentTextChanged.connect(worker.update_demod_type)
+        buffer_bar_layout.addWidget(QLabel("Demod Type:"))
+        demod_combobox_layout.addWidget(demod_combobox)
+        
 
         #####################
         # Signals and Slots #
