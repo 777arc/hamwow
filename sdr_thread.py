@@ -36,6 +36,7 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
     audio_buffer_write_pointer = 0
     audio_buffer = np.zeros(int(100e6), dtype=np.float32)
     kill_signal = False
+    gain = -1 # holds gain for when AGC is turned off
     
     # Note- this gets called automatically by PyAudio when the stream is started, and it doesnt block the run() calls
     def audio_callback(self, in_data, frame_count, time_info, status):
@@ -100,6 +101,7 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
     def update_gain(self, val):
         print("Updated gain to:", self.sdr.valid_gains_db[val], 'dB')
         self.sdr.gain = self.sdr.valid_gains_db[val]
+        self.gain = val
 
     def update_sample_rate(self, val):
         print("Updated sample rate to:", self.sample_rates[val], 'MHz')
@@ -107,6 +109,14 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
     
     def update_demod_freq(self, val):
         self.demod_freq_khz = val
+
+    def update_agc(self, val):
+        if val:
+            print("Turning AGC on")
+            self.sdr.gain = 'auto'
+        else:
+            print("Turning AGC off")
+            self.sdr.gain = self.sdr.valid_gains_db[self.gain]
 
     # Main loop
     def run(self):
