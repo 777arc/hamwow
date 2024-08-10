@@ -28,7 +28,8 @@ def test_fm_demod():
         plt.show()
 
     # Demodulate the signal
-    x, new_sample_rate = fm_demod(x, sample_rate)
+    fmdemod = fm_demod(sample_rate)
+    x, new_sample_rate = fmdemod.process(x)
 
     # plot PSD
     if False:
