@@ -1,5 +1,5 @@
 from PyQt6.QtCore import QSize, Qt, QThread, QTimer
-from PyQt6.QtWidgets import QMainWindow, QGridLayout, QWidget, QSpacerItem, QSlider, QLabel, QHBoxLayout, QVBoxLayout, QPushButton, QComboBox, QProgressBar  # tested with PyQt6==6.7.0
+from PyQt6.QtWidgets import QMainWindow, QGridLayout, QGraphicsRectItem, QWidget, QSpacerItem, QSlider, QLabel, QHBoxLayout, QVBoxLayout, QPushButton, QComboBox, QProgressBar  # tested with PyQt6==6.7.0
 import pyqtgraph as pg # tested with pyqtgraph==0.13.7
 import numpy as np
 from sdr_thread import SDRWorker
@@ -145,9 +145,6 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(QLabel('Demod Settings:'), 8, 0)
 
-        # Demod line on freq_plot
-        demod_line = freq_plot.addLine(x=100, y=None, pen={'color':'green', 'width':1.5})
-
         # Demod Freq slider with label, all units in kHz
         demod_freq_slider = QSlider(Qt.Orientation.Horizontal)
         demod_freq_slider.setRange(int(-2e3), int(2e3)) # in kHz, based on max sample rate
@@ -156,9 +153,15 @@ class MainWindow(QMainWindow):
         demod_freq_slider.setTickInterval(int(0.1e3))
         demod_freq_slider.valueChanged.connect(worker.update_demod_freq)
         demod_freq_label = QLabel()
+        rect_item = QGraphicsRectItem()
+        rect_item.setBrush(pg.mkBrush((0, 0, 255, 100)))
+        rect_item.setPen(pg.mkPen((0, 0, 0), width=0))
+        freq_plot.addItem(rect_item)
+        demod_line = freq_plot.addLine(x=100, y=None, pen={'color':'green', 'width':1.5}) # Demod line on freq_plot
         def update_demod_freq_label(val):
             demod_freq_label.setText("Demod Frequency [kHz]: " + str(val))
             demod_line.setValue(freq_slider.value()/1e3 + val/1e3)
+            rect_item.setRect(freq_slider.value()/1e3 + val/1e3, -100, 0.05, 200) #x,y,width,height
         demod_freq_slider.valueChanged.connect(update_demod_freq_label)
         update_demod_freq_label(demod_freq_slider.value()) # initialize the label
         layout.addWidget(demod_freq_slider, 9, 0)
