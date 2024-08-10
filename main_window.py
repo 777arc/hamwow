@@ -1,5 +1,5 @@
 from PyQt6.QtCore import QSize, Qt, QThread, QTimer
-from PyQt6.QtWidgets import QMainWindow, QGridLayout, QGraphicsRectItem, QWidget, QSpacerItem, QSlider, QLabel, QHBoxLayout, QVBoxLayout, QPushButton, QComboBox, QProgressBar  # tested with PyQt6==6.7.0
+from PyQt6.QtWidgets import QMainWindow, QGridLayout, QGraphicsRectItem, QWidget, QCheckBox, QSpacerItem, QSlider, QLabel, QHBoxLayout, QVBoxLayout, QPushButton, QComboBox, QProgressBar  # tested with PyQt6==6.7.0
 import pyqtgraph as pg # tested with pyqtgraph==0.13.7
 import numpy as np
 from sdr_thread import SDRWorker
@@ -129,6 +129,12 @@ class MainWindow(QMainWindow):
         gain_slider.valueChanged.connect(update_gain_label)
         layout.addWidget(gain_slider, 6, 0)
         layout.addWidget(gain_label, 6, 1)
+
+        # SDR AGC checkbox
+        agc_checkbox = QCheckBox("SDR AGC", self)
+        agc_checkbox.stateChanged.connect(worker.update_agc)
+        agc_checkbox.stateChanged.connect(lambda state: gain_slider.setEnabled(state == 0))
+        layout.addWidget(agc_checkbox, 6, 2)
 
         # Sample rate dropdown using QComboBox
         sample_rate_combobox = QComboBox()

@@ -7,6 +7,7 @@ from demods.fm import fm_demod
 from demods.dsb_am import dsb_am
 from threading import Thread
 import asyncio
+from dsp.agc import AGC
 
 class SDRWorker(QObject): # A QThread gets created in main_window which is assigned to this worker
     # PyQt Signals
@@ -37,6 +38,7 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
     audio_buffer_write_pointer = 0
     audio_buffer = np.zeros(int(100e6), dtype=np.float32)
     kill_signal = False
+    gain = -1 # holds gain for when AGC is turned off
     
     # Note- this gets called automatically by PyAudio when the stream is started, and it doesnt block the run() calls
     def audio_callback(self, in_data, frame_count, time_info, status):
@@ -93,6 +95,9 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
         # Init DSP
         self.fm_demod = fm_demod(self.sdr.sample_rate)
         self.dsb_am_demod = dsb_am(self.sdr.sample_rate)
+        
+        # AGC
+        self.agc = AGC(self.sdr.sample_rate/24, 10, 20, 0.5)
 
     # PyQt Slots
     def update_freq(self, val): # TODO: WE COULD JUST MODIFY THE SDR IN THE GUI THREAD
@@ -102,6 +107,7 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
     def update_gain(self, val):
         print("Updated gain to:", self.sdr.valid_gains_db[val], 'dB')
         self.sdr.gain = self.sdr.valid_gains_db[val]
+        self.gain = val
 
     def update_sample_rate(self, val):
         print("Updated sample rate to:", self.sample_rates[val], 'MHz')
@@ -113,6 +119,14 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
     def update_demod_type(self, val):
         self.demod_type = val
         print("Updated demod type to:", val)
+
+    def update_agc(self, val):
+        if val:
+            print("Turning AGC on")
+            self.sdr.gain = 'auto'
+        else:
+            print("Turning AGC off")
+            self.sdr.gain = self.sdr.valid_gains_db[self.gain]
 
     # Main loop
     def run(self):
@@ -146,6 +160,11 @@ class SDRWorker(QObject): # A QThread gets created in main_window which is assig
             samples_demod, new_sample_rate = self.fm_demod.process(samples_shifted)
         elif self.demod_type == 'DSB AM': # DSB AM
             samples_demod, new_sample_rate = self.dsb_am_demod.process(samples_shifted)
+        # Demod FM
+        samples_demod, new_sample_rate = self.fm_demod.process(samples_shifted)
+        
+        # Apply audio AGC
+        samples_demod = self.agc.apply_agc(samples_demod)
 
         # Play audio
         #samples_demod /= np.max(np.abs(samples_demod)) # normalize volume so its between -1 and +1

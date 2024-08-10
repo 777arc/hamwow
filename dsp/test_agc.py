@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 def test_agc():
     # Generate a simple signal
     block_size = 1000
-    num_blocks = 100
+    num_blocks = 1000
     sample_rate = 1e3
     x = np.random.randn(block_size, num_blocks) + 1j*np.random.randn(block_size, num_blocks)
     
@@ -14,13 +14,15 @@ def test_agc():
     
     x *= test_envelope
     
-    # plt.figure()
-    # plt.plot(x.flatten())
-    # plt.show()
+    if False:
+        plt.figure()
+        plt.plot(x.flatten())
+        plt.show()
     
     x_orig = np.copy(x)
     
-    agc = AGC(sample_rate, 1, 1, 0.5)
+    target_level = 0.5
+    agc = AGC(sample_rate, 1, 1, target_level)
     
     # Apply AGC
     for block in x:
@@ -28,15 +30,13 @@ def test_agc():
     
     x = x.flatten()
     x_orig = x_orig.flatten()
-    
-    plt.figure()
-    plt.plot(np.abs(x_orig), label='Original')
-    plt.plot(np.abs(x), label='AGC')
-    plt.legend()
-    plt.show()
-    
-    
 
-if __name__ == "__main__":
-    test_agc()
-    print("All tests pass")
+    if False:
+        plt.figure()
+        plt.plot(np.abs(x_orig), label='Original')
+        plt.plot(np.abs(x), label='AGC')
+        plt.legend()
+        plt.show()
+
+    assert np.max(np.abs(x_orig)) > target_level
+    assert np.abs(target_level - np.max(np.abs(x))) < 0.01
